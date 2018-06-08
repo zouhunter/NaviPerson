@@ -201,7 +201,7 @@ namespace NaviPerson
                 ImmediateMove(position, transform.rotation);
             }
 
-            m_mouseLook.SetCursorLock(false);
+            m_mouseLook.lockCursor = false;
         }
 
         private bool CanFirstViewControl()
