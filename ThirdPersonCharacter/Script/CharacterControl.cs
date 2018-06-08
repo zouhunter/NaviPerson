@@ -2,12 +2,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Events;
 using NaviPerson.CrossPlatformInput;
 using UnityEngine.Assertions.Comparers;
 namespace NaviPerson
 {
-    public delegate void ImmediateMoveAction(Vector3 pos);
-
     [RequireComponent(typeof(PersonCharacter))]
     public class CharacterControl : MonoBehaviour
     {
@@ -15,18 +14,16 @@ namespace NaviPerson
         public Transform Camera;
 
         [SerializeField]
-        private MouseLook m_MouseLook = new MouseLook();
-        private PersonCharacter m_Character;
-        private UnityEngine.AI.NavMeshAgent m_Agent;
-        private Vector3 m_CamForward;
-        private Vector3 m_Move;
+        private MouseLook m_mouseLook = new MouseLook();
+        private PersonCharacter m_character;
+        private UnityEngine.AI.NavMeshAgent m_agent;
+        private Vector3 m_camForward;
+        private Vector3 m_move;
 
-        private bool m_IsNavigate;
-        private bool m_NavMoved;
+        private bool m_isNavigate;
+
         private Vector3 m_TargetPosition;
         private ViewAdjustment m_Adjustment;
-        private Coroutine m_NavDetectedCo;
-
         private ViewAdjustment Adjustment
         {
             get
@@ -39,19 +36,76 @@ namespace NaviPerson
                 return m_Adjustment;
             }
         }
+        private FollowViewType viewType;
+        public event UnityAction onPlayerStop;
 
+        public MouseLook mouseLook { get { return m_mouseLook; } }
         private void Awake()
         {
-            m_Character = GetComponent<PersonCharacter>();
-            m_Agent = GetComponentInChildren<UnityEngine.AI.NavMeshAgent>();
+            m_character = GetComponent<PersonCharacter>();
+            m_agent = GetComponentInChildren<UnityEngine.AI.NavMeshAgent>();
         }
         IEnumerator Start()
         {
-            m_Agent.updateRotation = false;
-            m_Agent.updatePosition = true;
-            m_MouseLook.Init(transform, Camera.transform);
+            m_agent.updateRotation = false;
+            m_agent.updatePosition = true;
+            m_mouseLook.Init(transform, Camera.transform);
             yield return null;
         }
+        private void Update()
+        {
+            if (CanFirstViewControl())
+            {
+                m_mouseLook.LookRotation(transform, Camera.transform);
+            }
+        }
+
+        private void FixedUpdate()
+        {
+            CalcuteAndMove();
+        }
+
+        public void SwitchFollowView(FollowViewType type)
+        {
+            this.viewType = type;
+            switch (type)
+            {
+                case FollowViewType.First:
+                    HideBodys();
+                    m_mouseLook.Init(transform, Camera.transform);
+                    //if (!m_isNavigate){
+                    //    m_mouseLook.SetCursorLock(true);
+                    //}
+                    break;
+                case FollowViewType.Third:
+                    ShowBodys();
+                    //m_mouseLook.SetCursorLock(false);
+                    break;
+            }
+        }
+
+        public void ImmediateMove(Vector3 pos, Quaternion dir)
+        {
+            transform.position = pos;
+            transform.rotation = dir;
+            if (m_agent.isActiveAndEnabled)
+            {
+                m_agent.updatePosition = false;
+                m_agent.Warp(transform.position);
+                m_agent.updatePosition = true;
+            }
+            InternalImmediateStop();
+            MovePlayer(Vector3.zero);
+        }
+
+        public void ImmediateStop()
+        {
+            if (onPlayerStop != null)
+                onPlayerStop.Invoke();
+            InternalImmediateStop();
+        }
+
+        #region PrivateFunctions
         private void ShowBodys()
         {
             foreach (var b in bodys)
@@ -60,38 +114,63 @@ namespace NaviPerson
             }
         }
 
-        public event ImmediateMoveAction immediateMoveAction;
-        public void ImmediateMove(Vector3 pos, Quaternion dir)
+        private void CalcuteAndMove()
         {
-            //Facade.Instance.SendNotification(NotiConst.TargetDisable);
-            //Facade.Instance.SendNotification(NotiConst.ChangeLookType, LookType.Free);
-            m_Agent.updatePosition = false;
-            transform.position = pos;
-            transform.rotation = dir;
-            m_Agent.Warp(transform.position);
-            m_Agent.updatePosition = true;
-            ImmediateStop();
-            m_Character.Move(Vector3.zero);
-            if (immediateMoveAction != null)
+            float h;
+            float v;
+            float r;
+            bool isInput = IsInputControl(out h, out v, out r);
+            m_move = Vector3.zero;
+            if (isInput)
             {
-                immediateMoveAction(pos);
+                if (m_isNavigate)
+                {
+                    InternalImmediateStop();
+                }
+                m_move = GetInputMovement(h, v, r);
+            }
+            else if (m_isNavigate)
+            {
+                m_agent.SetDestination(m_TargetPosition);
+                if (m_agent.pathPending)
+                {
+                    Debug.Log("m_agent.pathPending");
+                }
+                else if (m_agent.remainingDistance < m_agent.stoppingDistance)
+                {
+                    ImmediateStop();
+                }
+                else
+                {
+                    m_move = m_agent.desiredVelocity;
+                }
+            }
+            MovePlayer(m_move);
+        }
+
+        private void MovePlayer(Vector3 move)
+        {
+            switch (viewType)
+            {
+                case FollowViewType.First:
+                    m_character.FirstPersonMove(move);
+                    break;
+                case FollowViewType.Third:
+                    m_character.ThirdPersonMove(move);
+                    break;
+                default:
+                    break;
             }
         }
 
-        public void ImmediateStop()
+        private void InternalImmediateStop()
         {
-            InternalImmediateStop();
-            if (m_NavDetectedCo != null)
+            if (m_agent.isActiveAndEnabled)
             {
-                StopCoroutine(m_NavDetectedCo);
-                m_NavDetectedCo = null;
+                m_agent.isStopped = true;
             }
-        }
-
-        void InternalImmediateStop()
-        {
-            m_Agent.isStopped = true;
-            m_IsNavigate = false;
+            m_isNavigate = false;
+            Debug.Log("InternalImmediateStop");
         }
 
         private void HideBodys()
@@ -102,141 +181,37 @@ namespace NaviPerson
             }
         }
 
-        public void SetTargetPositionFree(Vector3 position)
+        public void SetTargetPosition(Vector3 position)
         {
-            SetTargetPosition(position);
-            //Facade.Instance.SendNotification(NotiConst.ChangeLookType, LookType.Free);
-        }
-
-        public void SetTargetPositionFix(Vector3 position)
-        {
-            SetTargetPosition(position);
-            //Facade.Instance.SendNotification(NotiConst.TargetDisable);
-        }
-
-        void SetTargetPosition(Vector3 position)
-        {
-            if (m_NavDetectedCo != null)
-            {
-                StopCoroutine(m_NavDetectedCo);
-                m_NavDetectedCo = null;
-            }
-
-            m_NavMoved = false;
             ImmediateStop();
-            m_NavDetectedCo = StartCoroutine(DetectNavMoved(position));
+            DetectNavMoved(position);
         }
 
-        IEnumerator DetectNavMoved(Vector3 position)
+        private void DetectNavMoved(Vector3 position)
         {
-            int count = 0;
-            while (true)
+            if (m_agent != null)
             {
-                if (m_NavMoved)
-                {
-                    yield break;
-                }
-                else
-                {
-                    m_IsNavigate = true;
-                    m_TargetPosition = position;
-                    m_Agent.isStopped = false;
-                    m_MouseLook.SetCursorLock(false);
-                }
-
-                count++;
-                if (count > 10)
-                {
-                    ImmediateStop();
-                    //Facade.Instance.SendNotification(NotiConst.TargetDisable);
-                    yield break;
-                }
-
-                yield return null;
+                m_agent.enabled = true;
+                m_isNavigate = true;
+                m_TargetPosition = position;
+                m_agent.isStopped = false;
             }
+            else
+            {
+                ImmediateMove(position, transform.rotation);
+            }
+
+            m_mouseLook.SetCursorLock(false);
         }
 
-        public void SwitchFollowView(FollowViewType type)
-        {
-            switch (type)
-            {
-                case FollowViewType.First:
-                    HideBodys();
-                    m_MouseLook.Init(transform, Camera.transform);
-                    if (!m_IsNavigate)
-                    {
-                        m_MouseLook.SetCursorLock(true);
-                    }
-                    break;
-                case FollowViewType.Third:
-                    ShowBodys();
-                    m_MouseLook.SetCursorLock(false);
-                    break;
-            }
-        }
-
-        void Update()
-        {
-            if (CanFirstViewControl())
-            {
-                m_MouseLook.LookRotation(transform, Camera.transform);
-            }
-        }
-
-        private void FixedUpdate()
-        {
-            float h;
-            float v;
-            float r;
-            bool isInput = IsInputControl(out h, out v, out r);
-            m_Move = Vector3.zero;
-
-            if (isInput)
-            {
-                if (m_IsNavigate)
-                {
-                    //Facade.Instance.SendNotification(NotiConst.ChangeLookType, LookType.Free);
-                    //Facade.Instance.SendNotification(NotiConst.TargetDisable);
-                }
-
-                m_Move = GetInputMovement(h, v, r);
-                ImmediateStop();
-            }
-            else if (m_IsNavigate)
-            {
-                m_Agent.SetDestination(m_TargetPosition);
-                if (!m_Agent.pathPending &&
-                    m_Agent.remainingDistance < m_Agent.stoppingDistance)
-                {
-                    InternalImmediateStop();
-                    if (m_NavMoved)
-                    {
-                        //Facade.Instance.SendNotification(NotiConst.TargetDisable);
-                    }
-                }
-                else
-                {
-                    m_NavMoved = true;
-                    m_Move = m_Agent.desiredVelocity;
-                }
-            }
-
-            m_Character.Move(m_Move);
-        }
-
-        bool CanFirstViewControl()
+        private bool CanFirstViewControl()
         {
             if (Adjustment == null)
             {
                 return true;
             }
 
-            if (Adjustment.ViewType == FollowViewType.Third)
-            {
-                return false;
-            }
-
-            if (m_IsNavigate)
+            if (m_isNavigate)
             {
                 return false;
             }
@@ -244,7 +219,7 @@ namespace NaviPerson
             return true;
         }
 
-        Vector3 GetInputMovement(float h, float v, float r)
+        private Vector3 GetInputMovement(float h, float v, float r)
         {
             Vector3 movement;
             if (Camera != null)
@@ -256,8 +231,8 @@ namespace NaviPerson
                     calculateForward = Camera.forward;
                     calculateRight = Camera.right;
                 }
-                m_CamForward = Vector3.Scale(calculateForward, new Vector3(1, 0, 1)).normalized;
-                movement = v * m_CamForward + h * calculateRight;
+                m_camForward = Vector3.Scale(calculateForward, new Vector3(1, 0, 1)).normalized;
+                movement = v * m_camForward + h * calculateRight;
             }
             else
             {
@@ -271,11 +246,10 @@ namespace NaviPerson
                 r *= 0.5f;
             }
 #endif
-
             return movement;
         }
 
-        bool IsInputControl(out float h, out float v, out float r)
+        private bool IsInputControl(out float h, out float v, out float r)
         {
             h = CrossPlatformInputManager.GetAxis("Horizontal");
             v = CrossPlatformInputManager.GetAxis("Vertical");
@@ -293,5 +267,6 @@ namespace NaviPerson
 
             return false;
         }
+        #endregion
     }
 }

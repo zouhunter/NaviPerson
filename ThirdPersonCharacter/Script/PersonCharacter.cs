@@ -63,19 +63,9 @@ namespace NaviPerson
                                       | RigidbodyConstraints.FreezeRotationY
                                       | RigidbodyConstraints.FreezeRotationZ;
         }
-        public void Move(Vector3 vec)
-        {
-            if (haveAnimator)
-            {
-                ThirdPersonMove(vec);
-            }
-            else
-            {
-                FirstPersonMove(vec);
-            }
-        }
+
         #region First Person Move
-        private void FirstPersonMove(Vector3 vec)
+        public void FirstPersonMove(Vector3 vec)
         {
             if (vec.magnitude > 1f)
             {
@@ -83,13 +73,12 @@ namespace NaviPerson
             }
 
             Vector3 desiredMove = Vector3.ProjectOnPlane(vec, Vector3.up);
-
             m_Rigidbody.velocity = desiredMove * m_MoveSpeedMultiplier * 4f * m_MovingTurnSpeed * 0.01f;
         }
         #endregion
 
         #region Third Person Move
-        private void ThirdPersonMove(Vector3 vec)
+        public void ThirdPersonMove(Vector3 vec)
         {
             if (vec.magnitude > 1f)
             {
@@ -99,18 +88,17 @@ namespace NaviPerson
             vec = transform.InverseTransformDirection(vec);
             animator.applyRootMotion = true;
             vec = Vector3.ProjectOnPlane(vec, Vector3.up);
-            if (!FloatComparer.AreEqual(vec.x, 0f, Mathf.Epsilon)
-                || !FloatComparer.AreEqual(vec.z, 0f, Mathf.Epsilon))
+
+            if (!FloatComparer.AreEqual(vec.x, 0f, Mathf.Epsilon))//    || !FloatComparer.AreEqual(vec.z, 0f, Mathf.Epsilon))
             {
-                m_TurnAmount = Mathf.Atan2(vec.x, vec.z);
+                m_TurnAmount = vec.x;/*Mathf.Atan2(vec.x, vec.z)*/;
             }
             else
             {
                 m_TurnAmount = 0f;
             }
 
-            m_ForwardAmount = vec.z;
-
+            m_ForwardAmount = vec.z * 2;
             ApplyExtraTurnRotation();
 
             UpdateAnimator(vec);

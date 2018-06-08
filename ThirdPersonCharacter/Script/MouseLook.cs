@@ -20,7 +20,7 @@ namespace NaviPerson
 
         private Quaternion m_CharacterTargetRot;
         private Quaternion m_CameraTargetRot;
-        private bool m_cursorIsLocked = false;
+        private bool m_cursorIsLocked { get { return Cursor.lockState == CursorLockMode.Locked; } }
         private PointerEventData pointData;
         public void Init(Transform character, Transform camera)
         {
@@ -34,7 +34,7 @@ namespace NaviPerson
         {
             UpdateCursorLock();
 
-            if (!m_cursorIsLocked) 
+            if (!m_cursorIsLocked)
             {
                 return;
             }
@@ -42,17 +42,17 @@ namespace NaviPerson
             float yRot = Input.GetAxis("Mouse X") * XSensitivity;
             float xRot = Input.GetAxis("Mouse Y") * YSensitivity;
 
-            m_CharacterTargetRot *= Quaternion.Euler (0f, yRot, 0f);
-            m_CameraTargetRot *= Quaternion.Euler (-xRot, 0f, 0f);
+            m_CharacterTargetRot *= Quaternion.Euler(0f, yRot, 0f);
+            m_CameraTargetRot *= Quaternion.Euler(-xRot, 0f, 0f);
 
-            if(clampVerticalRotation)
-                m_CameraTargetRot = ClampRotationAroundXAxis (m_CameraTargetRot);
+            if (clampVerticalRotation)
+                m_CameraTargetRot = ClampRotationAroundXAxis(m_CameraTargetRot);
 
-            if(smooth)
+            if (smooth)
             {
-                character.localRotation = Quaternion.Slerp (character.localRotation, m_CharacterTargetRot,
+                character.localRotation = Quaternion.Slerp(character.localRotation, m_CharacterTargetRot,
                     smoothTime * Time.deltaTime);
-                camera.localRotation = Quaternion.Slerp (camera.localRotation, m_CameraTargetRot,
+                camera.localRotation = Quaternion.Slerp(camera.localRotation, m_CameraTargetRot,
                     smoothTime * Time.deltaTime);
             }
             else
@@ -60,23 +60,33 @@ namespace NaviPerson
                 character.localRotation = m_CharacterTargetRot;
                 camera.localRotation = m_CameraTargetRot;
             }
-
-            //UpdateCursorLock();
         }
 
-        public void SetCursorLock(bool value)
+        public void SwitchCursorLock()
         {
-            m_cursorIsLocked = value;
-
-            if (!m_cursorIsLocked)
+            if (Cursor.lockState == CursorLockMode.None)
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
+            else
             {
                 Cursor.lockState = CursorLockMode.None;
                 Cursor.visible = true;
             }
-            else
+        }
+        public void SetCursorLock(bool @lock)
+        {
+            Debug.Log("SetCursorLock:" + @lock);
+            if (@lock)
             {
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
+            }
+            else
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
             }
         }
 
@@ -93,32 +103,33 @@ namespace NaviPerson
                 {
                     pointData.position = Input.mousePosition;
                     List<RaycastResult> hits = new List<RaycastResult>();
-                    EventSystem.current.RaycastAll(pointData, hits);
-                    bool hitUI = false;
-                    foreach (var item in hits)
+                    if (EventSystem.current == null)
                     {
-                        hitUI = item.gameObject.GetComponent<RectTransform>();
-                        if (hitUI){
-                            break;
+                        SetCursorLock(true);
+                    }
+                    else
+                    {
+                        EventSystem.current.RaycastAll(pointData, hits);
+                        bool hitUI = false;
+                        foreach (var item in hits)
+                        {
+                            hitUI = item.gameObject.GetComponent<RectTransform>();
+                            if (hitUI)
+                            {
+                                break;
+                            }
+                        }
+                        if (!hitUI)
+                        {
+                            SetCursorLock(true);
                         }
                     }
-                    if(!hitUI) m_cursorIsLocked = true;
+
                 }
                 else
                 {
-                    m_cursorIsLocked = false;
+                    SetCursorLock(false);
                 }
-            }
-
-            if (m_cursorIsLocked)
-            {
-                Cursor.lockState = CursorLockMode.Locked;
-                Cursor.visible = false;
-            }
-            else
-            {
-                Cursor.lockState = CursorLockMode.None;
-                Cursor.visible = true;
             }
         }
 
@@ -129,11 +140,11 @@ namespace NaviPerson
             q.z /= q.w;
             q.w = 1.0f;
 
-            float angleX = 2.0f * Mathf.Rad2Deg * Mathf.Atan (q.x);
+            float angleX = 2.0f * Mathf.Rad2Deg * Mathf.Atan(q.x);
 
-            angleX = Mathf.Clamp (angleX, MinimumX, MaximumX);
+            angleX = Mathf.Clamp(angleX, MinimumX, MaximumX);
 
-            q.x = Mathf.Tan (0.5f * Mathf.Deg2Rad * angleX);
+            q.x = Mathf.Tan(0.5f * Mathf.Deg2Rad * angleX);
 
             return q;
         }
