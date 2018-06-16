@@ -9,7 +9,7 @@ namespace NaviPerson
     [RequireComponent(typeof(CapsuleCollider))]
     public class PersonCharacter : MonoBehaviour
     {
-        private bool haveAnimator;
+        //private bool haveAnimator;
         [SerializeField]
         private float m_MovingTurnSpeed = 100;
         [SerializeField]
@@ -27,6 +27,7 @@ namespace NaviPerson
                 m_StationaryTurnSpeed = value;
             }
         }
+
         public float MoveSpeedMultiplier
         {
             get { return m_MoveSpeedMultiplier; }
@@ -56,7 +57,7 @@ namespace NaviPerson
         // Use this for initialization
         void Awake()
         {
-            haveAnimator = animator != null;
+            //haveAnimator = animator != null;
             m_Rigidbody = GetComponent<Rigidbody>();
 
             m_Rigidbody.constraints = RigidbodyConstraints.FreezeRotationX
@@ -65,16 +66,21 @@ namespace NaviPerson
         }
 
         #region First Person Move
-        public void FirstPersonMove(Vector3 vec)
+        public void FirstPersonMove(Vector3 vec,bool rotate)
         {
-            if (vec.magnitude > 1f)
-            {
+            if (vec.magnitude > 1f){
                 vec.Normalize();
             }
 
             Vector3 desiredMove = Vector3.ProjectOnPlane(vec, Vector3.up);
             m_Rigidbody.velocity = desiredMove * m_MoveSpeedMultiplier * 4f * m_MovingTurnSpeed * 0.01f;
+
+            if(rotate && m_Rigidbody.velocity != Vector3.zero)
+            {
+                transform.forward = Vector3.Lerp(transform.forward,m_Rigidbody.velocity, 0.1f);
+            }
         }
+
         #endregion
 
         #region Third Person Move

@@ -8,64 +8,49 @@ namespace NaviPerson
     [Serializable]
     public class MouseLook
     {
-        [SerializeField]
-        private float XSensitivity = 2f;
-        [SerializeField]
-        private float YSensitivity = 2f;
-        [SerializeField]
-        private bool clampVerticalRotation = true;
-        [SerializeField]
-        private float MinimumX = -90F;
-        [SerializeField]
-        private float MaximumX = 90F;
-        [SerializeField]
-        private bool smooth;
-        [SerializeField]
-        private float smoothTime = 5f;
+        public float XSensitivity = 2f;
+        public float YSensitivity = 2f;
+        public bool clampVerticalRotation = true;
+        public float MinimumX = -90F;
+        public float MaximumX = 90F;
+        public bool smooth;
+        public float smoothTime = 5f;
+        //public bool lockCursor = true;
 
 
-        private bool _cursorLock = false;
         private Quaternion m_CharacterTargetRot;
         private Quaternion m_CameraTargetRot;
-        /// <summary>
-        /// Òþ²ØÊó±ê
-        /// </summary>
-        public bool lockCursor { get
-            {
-                return _cursorLock;
-            }
-            set {
-                _cursorLock = value;
-                Cursor.visible = !_cursorLock;
-            }
-        }
+        public bool cursorIsLocked { get { return Cursor.lockState == CursorLockMode.Locked; } }
         private PointerEventData pointData;
+
+        private Transform m_character;
+        private Transform m_camera;
         public void Init(Transform character, Transform camera)
         {
-            m_CharacterTargetRot = character.localRotation;
-            m_CameraTargetRot = camera.localRotation;
+            m_character = character;
+            m_camera = camera;
+            UpdateTargetRots(character.localRotation, camera.localRotation);
+        }
+
+        private void UpdateTargetRots(Quaternion character, Quaternion camera)
+        {
+            m_CharacterTargetRot = character;
+            m_CameraTargetRot = camera;
             pointData = new PointerEventData(EventSystem.current);
         }
 
-        private Vector3 mouse_position;
 
         public void LookRotation(Transform character, Transform camera)
         {
             UpdateCursorLock();
 
-            if (!lockCursor)
+            if (!cursorIsLocked)
             {
-                mouse_position = Input.mousePosition;
                 return;
             }
 
-            if (mouse_position == Vector3.zero)
-                mouse_position = Input.mousePosition;
-
-            var vec_span = Input.mousePosition - mouse_position;
-            float yRot = vec_span.x * XSensitivity;
-            float xRot = vec_span.y * YSensitivity;
-            mouse_position = Input.mousePosition;
+            float yRot = Input.GetAxis("Mouse X") * XSensitivity;
+            float xRot = Input.GetAxis("Mouse Y") * YSensitivity;
 
             m_CharacterTargetRot *= Quaternion.Euler(0f, yRot, 0f);
             m_CameraTargetRot *= Quaternion.Euler(-xRot, 0f, 0f);
@@ -87,6 +72,21 @@ namespace NaviPerson
             }
         }
 
+        public void SetCursorLock(bool @lock)
+        {
+            // Debug.Log("SetCursorLock:" + @lock);
+            if (@lock)
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
+            else
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
+        }
+
         public void UpdateCursorLock()
         {
             InternalLockUpdate();
@@ -96,13 +96,15 @@ namespace NaviPerson
         {
             if (Input.GetMouseButtonUp(1))
             {
-                if (!lockCursor)
+                if (Cursor.visible)
                 {
+                    UpdateTargetRots(m_character.localRotation, m_camera.localRotation);
+
                     pointData.position = Input.mousePosition;
                     List<RaycastResult> hits = new List<RaycastResult>();
                     if (EventSystem.current == null)
                     {
-                        lockCursor = true;
+                        SetCursorLock(true);
                     }
                     else
                     {
@@ -118,14 +120,14 @@ namespace NaviPerson
                         }
                         if (!hitUI)
                         {
-                            lockCursor = true;
+                            SetCursorLock(true);
                         }
                     }
 
                 }
                 else
                 {
-                    lockCursor = false;
+                    SetCursorLock(false);
                 }
             }
         }

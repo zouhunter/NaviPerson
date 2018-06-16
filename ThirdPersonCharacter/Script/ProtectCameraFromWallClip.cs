@@ -32,7 +32,7 @@ namespace NaviPerson
         private RayHitComparer m_RayHitComparer;  // variable to compare raycast hit distances
 
 
-        private void Start()
+        private void Awake()
         {
             // find the camera in the object hierarchy
             m_Cam = GetComponentInChildren<Camera>().transform;

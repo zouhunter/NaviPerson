@@ -10,6 +10,7 @@ namespace NaviPerson
     [RequireComponent(typeof(PersonCharacter))]
     public class CharacterControl : MonoBehaviour
     {
+        public static bool log;
         public GameObject[] bodys;
         public Transform Camera;
 
@@ -38,19 +39,22 @@ namespace NaviPerson
         }
         private FollowViewType viewType;
         public event UnityAction onPlayerStop;
-
-        public MouseLook mouseLook { get { return m_mouseLook; } }
+        private UnityEngine.AI.NavMeshPath path;
+        public MouseLook MouseLook { get { return m_mouseLook; } }
+        public event UnityAction<UnityEngine.AI.NavMeshPath> onCalcuteNaviPoints;
         private void Awake()
         {
+            path = new UnityEngine.AI.NavMeshPath();
             m_character = GetComponent<PersonCharacter>();
             m_agent = GetComponentInChildren<UnityEngine.AI.NavMeshAgent>();
+            m_agent.enabled = false;
         }
-        IEnumerator Start()
+        private void Start()
         {
             m_agent.updateRotation = false;
             m_agent.updatePosition = true;
+            m_agent.enabled = true;
             m_mouseLook.Init(transform, Camera.transform);
-            yield return null;
         }
         private void Update()
         {
@@ -86,15 +90,29 @@ namespace NaviPerson
 
         public void ImmediateMove(Vector3 pos, Quaternion dir)
         {
+            if (m_agent)
+            {
+                m_agent.enabled = false; 
+            }
+
+            InternalImmediateStop();
             transform.position = pos;
             transform.rotation = dir;
-            if (m_agent.isActiveAndEnabled)
+            Debug.Log(transform.position);
+            m_mouseLook.Init(transform, Camera.transform);
+
+            if (m_agent)
             {
-                m_agent.updatePosition = false;
-                m_agent.Warp(transform.position);
-                m_agent.updatePosition = true;
+                m_agent.enabled = true;
+                if (m_agent.isActiveAndEnabled)
+                {
+                    m_agent.updatePosition = false;
+                    m_agent.Warp(pos);
+                    m_agent.updatePosition = true;
+                }
+              
             }
-            InternalImmediateStop();
+
             MovePlayer(Vector3.zero);
         }
 
@@ -134,16 +152,30 @@ namespace NaviPerson
                 m_agent.SetDestination(m_TargetPosition);
                 if (m_agent.pathPending)
                 {
-                    Debug.Log("m_agent.pathPending");
+                    // Debug.Log("m_agent.pathPending");
                 }
                 else if (m_agent.remainingDistance < m_agent.stoppingDistance)
                 {
                     ImmediateStop();
+
+                    if (onCalcuteNaviPoints != null)
+                        onCalcuteNaviPoints.Invoke(null);
                 }
                 else
                 {
+                    if (m_agent.CalculatePath(m_TargetPosition, path))
+                    {
+                        if (onCalcuteNaviPoints != null)
+                            onCalcuteNaviPoints.Invoke(path);
+                    }
+                    else
+                    {
+                        Debug.Log("can not calcute path:" + path);
+                    }
                     m_move = m_agent.desiredVelocity;
                 }
+
+
             }
             MovePlayer(m_move);
         }
@@ -153,7 +185,7 @@ namespace NaviPerson
             switch (viewType)
             {
                 case FollowViewType.First:
-                    m_character.FirstPersonMove(move);
+                    m_character.FirstPersonMove(move,!m_mouseLook.cursorIsLocked && m_isNavigate);
                     break;
                 case FollowViewType.Third:
                     m_character.ThirdPersonMove(move);
@@ -165,12 +197,11 @@ namespace NaviPerson
 
         private void InternalImmediateStop()
         {
-            if (m_agent.isActiveAndEnabled)
-            {
+            if (m_agent.isActiveAndEnabled && m_agent.isOnNavMesh){
                 m_agent.isStopped = true;
             }
             m_isNavigate = false;
-            Debug.Log("InternalImmediateStop");
+            if (log) Debug.Log("InternalImmediateStop");
         }
 
         private void HideBodys()
@@ -189,7 +220,7 @@ namespace NaviPerson
 
         private void DetectNavMoved(Vector3 position)
         {
-            if (m_agent != null)
+            if (m_agent != null && m_agent.isOnNavMesh)
             {
                 m_agent.enabled = true;
                 m_isNavigate = true;
@@ -201,7 +232,7 @@ namespace NaviPerson
                 ImmediateMove(position, transform.rotation);
             }
 
-            m_mouseLook.lockCursor = false;
+            m_mouseLook.SetCursorLock(false);
         }
 
         private bool CanFirstViewControl()
@@ -210,12 +241,6 @@ namespace NaviPerson
             {
                 return true;
             }
-
-            if (m_isNavigate)
-            {
-                return false;
-            }
-
             return true;
         }
 

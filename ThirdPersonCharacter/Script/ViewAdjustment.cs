@@ -16,16 +16,14 @@ namespace NaviPerson
     {
         public FollowViewType ViewType;
         public bool IsSwitching { get; private set; }
+      
         public event Action OnSwitchCompleted;
         public bool supportSwitch;
         public Transform m_Camera;
         private ProtectCameraFromWallClip m_Clip;
-
-        private Vector3 m_LastPosition;
-        private Vector3 m_LastEuler;
-
         private CharacterControl m_CharacterCtrl;
-
+        private float cameraHeight = 0;
+        private float cameraDistence = 0;
         CharacterControl CharacterCtrl
         {
             get
@@ -107,13 +105,14 @@ namespace NaviPerson
             Vector3 pos = GetPosition(type);
             Vector3 rot = GetRotate();
 
-            m_LastPosition = m_Camera.localPosition;
-            m_LastEuler = m_Camera.localEulerAngles;
             IsSwitching = true;
 
             SwitchType(type);
             m_Camera.localPosition = pos;
             m_Camera.localEulerAngles = rot;
+
+            Debug.Log(pos);
+            Debug.Log(rot);
         }
 
         void SwitchType(FollowViewType type)
@@ -152,34 +151,20 @@ namespace NaviPerson
 
         Vector3 GetPosition(FollowViewType type)
         {
-            if (m_LastPosition != Vector3.zero)
+            float distance = cameraDistence;
+            float height = cameraHeight;
+            if (type == FollowViewType.Third)
             {
-                return m_LastPosition;
+                distance = -3.7f;
+                height = 0.56f;
             }
-            else
-            {
-                float distance = 0.3f;
-                float height = 0.2f;
-                if (type == FollowViewType.Third)
-                {
-                    distance = -3.7f;
-                    height = 1.56f;
-                }
 
-                return new Vector3(m_Camera.localPosition.x, height, distance);
-            }
+            return new Vector3(m_Camera.localPosition.x, height, distance);
         }
 
         Vector3 GetRotate()
         {
-            if (m_LastEuler != Vector3.zero)
-            {
-                return m_LastEuler;
-            }
-            else
-            {
-                return m_Camera.localEulerAngles;
-            }
+            return m_Camera.localEulerAngles;
         }
 
         void Update()
